@@ -74,7 +74,7 @@ class BookCard extends StatelessWidget {
                                       snapshot.data!,
                                       fit: BoxFit.cover,
                                       width: double.infinity,
-                                      errorBuilder: (_, __, ___) => Container(
+                                      errorBuilder: (context, error, stackTrace) => Container(
                                         color: Theme.of(context)
                                             .colorScheme
                                             .primaryContainer,
@@ -92,7 +92,7 @@ class BookCard extends StatelessWidget {
                                 File(book.coverPath!),
                                 fit: BoxFit.cover,
                                 width: double.infinity,
-                                errorBuilder: (_, __, ___) => Container(
+                                errorBuilder: (context, error, stackTrace) => Container(
                                   color: Theme.of(context)
                                       .colorScheme
                                       .primaryContainer,
@@ -110,7 +110,7 @@ class BookCard extends StatelessWidget {
                           color: Theme.of(context)
                               .colorScheme
                               .surface
-                              .withOpacity(0.85),
+                              .withValues(alpha: 0.85),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: const Icon(Icons.delete, size: 18),

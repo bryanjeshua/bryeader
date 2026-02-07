@@ -168,7 +168,7 @@ class _ReadingPageState extends ConsumerState<ReadingPage> {
       chapterIndex: _chapterIndex,
       startOffset: start,
       endOffset: end,
-      colorValue: selected.value,
+      colorValue: selected.toARGB32(),
       createdAt: DateTime.now(),
     );
 
@@ -230,7 +230,7 @@ class _ReadingPageState extends ConsumerState<ReadingPage> {
             style: bgColor == null
                 ? null
                 : TextStyle(
-                    backgroundColor: bgColor.withOpacity(0.7),
+                    backgroundColor: bgColor.withValues(alpha: 0.7),
                   ),
           ),
         );
@@ -314,7 +314,7 @@ class _ReadingPageState extends ConsumerState<ReadingPage> {
           style: bgColor == null
               ? null
               : TextStyle(
-                  backgroundColor: bgColor.withOpacity(0.7),
+                  backgroundColor: bgColor.withValues(alpha: 0.7),
                 ),
         ),
       );
