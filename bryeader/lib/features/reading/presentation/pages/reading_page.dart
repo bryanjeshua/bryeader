@@ -177,6 +177,113 @@ class _ReadingPageState extends ConsumerState<ReadingPage> {
         .add(highlight);
   }
 
+  Widget _buildTextContent(
+    ParsedChapter chapter,
+    List<Highlight> highlights,
+    ReadingSettings settings,
+  ) {
+    if (chapter.blocks.isEmpty) {
+      // Fallback to old rendering if no blocks
+      return SelectableText.rich(
+        _buildHighlightedText(chapter, highlights, settings),
+        onSelectionChanged: (selection, _) {
+          _selection = selection;
+        },
+        contextMenuBuilder: (context, editableTextState) {
+          return _buildContextMenu(context, editableTextState);
+        },
+      );
+    }
+
+    // Build widgets for each block with proper hierarchy
+    final widgets = <Widget>[];
+    
+    for (final block in chapter.blocks) {
+      final blockSpans = <TextSpan>[];
+      int cursor = block.start;
+      
+      // Find tokens within this block
+      final blockTokens = chapter.tokens.where((token) =>
+        token.start >= block.start && token.end <= block.end
+      ).toList();
+
+      for (final token in blockTokens) {
+        if (token.start > cursor) {
+          final text = chapter.text.substring(cursor, token.start);
+          blockSpans.add(TextSpan(text: text));
+        }
+
+        final overlapping = highlights.where((h) {
+          if (h.chapterIndex != _chapterIndex) {
+            return false;
+          }
+          return h.startOffset < token.end && h.endOffset > token.start;
+        }).toList();
+
+        final bgColor = overlapping.isNotEmpty
+            ? Color(overlapping.last.colorValue)
+            : null;
+
+        blockSpans.add(
+          TextSpan(
+            text: chapter.text.substring(token.start, token.end),
+            style: bgColor == null
+                ? null
+                : TextStyle(
+                    backgroundColor: bgColor.withOpacity(0.7),
+                  ),
+          ),
+        );
+
+        cursor = token.end;
+      }
+
+      if (cursor < block.end) {
+        blockSpans.add(TextSpan(text: chapter.text.substring(cursor, block.end)));
+      }
+
+      // Determine style based on block type
+      final baseStyle = TextStyle(
+        fontSize: settings.fontSize,
+        height: settings.lineHeight,
+        color: Theme.of(context).colorScheme.onSurface,
+      );
+
+      final blockStyle = block.type == 'heading'
+          ? baseStyle.copyWith(
+              fontSize: settings.fontSize * 1.4,
+              fontWeight: FontWeight.bold,
+            )
+          : baseStyle;
+
+      widgets.add(
+        Padding(
+          padding: EdgeInsets.only(
+            bottom: block.type == 'heading' ? 16.0 : 12.0,
+            top: block.type == 'heading' ? 8.0 : 0.0,
+          ),
+          child: SelectableText.rich(
+            TextSpan(
+              style: blockStyle,
+              children: blockSpans,
+            ),
+            onSelectionChanged: (selection, _) {
+              _selection = selection;
+            },
+            contextMenuBuilder: (context, editableTextState) {
+              return _buildContextMenu(context, editableTextState);
+            },
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: widgets,
+    );
+  }
+
   TextSpan _buildHighlightedText(
     ParsedChapter chapter,
     List<Highlight> highlights,
@@ -226,6 +333,36 @@ class _ReadingPageState extends ConsumerState<ReadingPage> {
         color: Theme.of(context).colorScheme.onSurface,
       ),
       children: spans,
+    );
+  }
+
+  Widget _buildContextMenu(BuildContext context, EditableTextState editableTextState) {
+    final items = editableTextState.contextMenuButtonItems;
+    if (_selection != null &&
+        _selection!.isValid &&
+        !_selection!.isCollapsed) {
+      items.insert(
+        0,
+        ContextMenuButtonItem(
+          onPressed: () {
+            editableTextState.hideToolbar();
+            final start = min(
+              _selection!.start,
+              _selection!.end,
+            );
+            final end = max(
+              _selection!.start,
+              _selection!.end,
+            );
+            _showHighlightSheet(start, end);
+          },
+          label: 'Highlight',
+        ),
+      );
+    }
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: editableTextState.contextMenuAnchors,
+      buttonItems: items,
     );
   }
 
@@ -286,42 +423,7 @@ class _ReadingPageState extends ConsumerState<ReadingPage> {
                       controller: _scrollController,
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
-                        child: SelectableText.rich(
-                          _buildHighlightedText(parsed, highlights, settings),
-                          onSelectionChanged: (selection, _) {
-                            _selection = selection;
-                          },
-                          contextMenuBuilder: (context, editableTextState) {
-                            final items =
-                                editableTextState.contextMenuButtonItems;
-                            if (_selection != null &&
-                                _selection!.isValid &&
-                                !_selection!.isCollapsed) {
-                              items.insert(
-                                0,
-                                ContextMenuButtonItem(
-                                  onPressed: () {
-                                    editableTextState.hideToolbar();
-                                    final start = min(
-                                      _selection!.start,
-                                      _selection!.end,
-                                    );
-                                    final end = max(
-                                      _selection!.start,
-                                      _selection!.end,
-                                    );
-                                    _showHighlightSheet(start, end);
-                                  },
-                                  label: 'Highlight',
-                                ),
-                              );
-                            }
-                            return AdaptiveTextSelectionToolbar.buttonItems(
-                              anchors: editableTextState.contextMenuAnchors,
-                              buttonItems: items,
-                            );
-                          },
-                        ),
+                        child: _buildTextContent(parsed, highlights, settings),
                       ),
                     ),
                   ),
