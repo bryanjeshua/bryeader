@@ -49,6 +49,7 @@ class LibraryPage extends ConsumerWidget {
                           bookId: book.id,
                           filePath: book.filePath,
                           initialChapter: book.lastReadChapter,
+                          initialOffset: book.lastReadOffset,
                         ),
                       );
                     },

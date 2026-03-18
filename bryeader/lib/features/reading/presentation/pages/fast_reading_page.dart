@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/routing/app_router.dart';
 import '../../../epub/data/chapter_content_parser.dart';
+import '../../../library/presentation/providers/library_provider.dart';
 import '../../presentation/providers/reading_provider.dart';
 
 class FastReadingPage extends ConsumerStatefulWidget {
@@ -32,6 +33,7 @@ class _FastReadingPageState extends ConsumerState<FastReadingPage> {
   void initState() {
     super.initState();
     _chapterIndex = widget.arguments.initialChapter;
+    _tokenIndex = widget.arguments.initialTokenIndex;
     final settings = ref.read(readingSettingsProvider);
     _wordsPerMinute = settings.wordsPerMinute;
     _wordsPerPhrase = settings.wordsPerPhrase;
@@ -40,7 +42,16 @@ class _FastReadingPageState extends ConsumerState<FastReadingPage> {
   @override
   void dispose() {
     _timer?.cancel();
+    _saveProgress();
     super.dispose();
+  }
+
+  void _saveProgress() {
+    ref.read(libraryProvider.notifier).updateFastReadingProgress(
+          widget.arguments.bookId,
+          _chapterIndex,
+          _tokenIndex,
+        );
   }
 
   void _loadChapter(String htmlContent) {
@@ -73,6 +84,7 @@ class _FastReadingPageState extends ConsumerState<FastReadingPage> {
       _startTimer();
     } else {
       _timer?.cancel();
+      _saveProgress();
     }
   }
 
@@ -171,11 +183,13 @@ class _FastReadingPageState extends ConsumerState<FastReadingPage> {
                 _tokenIndex = 0;
                 _loadedChapterIndex = null;
               });
+              _saveProgress();
             } else {
               setState(() {
                 _isPlaying = false;
               });
               _timer?.cancel();
+              _saveProgress();
             }
           });
         }
@@ -184,7 +198,16 @@ class _FastReadingPageState extends ConsumerState<FastReadingPage> {
         final current = _phraseAt(_tokenIndex, _wordsPerPhrase);
         final next = _phraseAt(_tokenIndex + _wordsPerPhrase, 2);
 
-        return Scaffold(
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop) {
+              _timer?.cancel();
+              _saveProgress();
+              Navigator.of(context).pop(_tokenIndex);
+            }
+          },
+          child: Scaffold(
           appBar: AppBar(
             title: Text(chapter.title),
             actions: [
@@ -273,6 +296,7 @@ class _FastReadingPageState extends ConsumerState<FastReadingPage> {
               ],
             ),
           ),
+        ),
         );
       },
       error: (error, _) => Scaffold(

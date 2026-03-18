@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -26,15 +27,23 @@ class _ReadingPageState extends ConsumerState<ReadingPage> {
   int? _loadedChapterIndex;
   ParsedChapter? _parsedChapter;
   TextSelection? _selection;
+  bool _needsOffsetRestore = false;
+  int? _highlightTokenIndex;
+  Timer? _highlightTimer;
+  final GlobalKey _highlightBlockKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _chapterIndex = widget.arguments.initialChapter;
+    if (widget.arguments.initialOffset > 0) {
+      _needsOffsetRestore = true;
+    }
   }
 
   @override
   void dispose() {
+    _highlightTimer?.cancel();
     if (_scrollController.hasClients) {
       _saveProgress();
     }
@@ -49,7 +58,16 @@ class _ReadingPageState extends ConsumerState<ReadingPage> {
       _loadedChapterIndex = _chapterIndex;
       _selection = null;
     });
-    if (_scrollController.hasClients) {
+    if (_needsOffsetRestore) {
+      _needsOffsetRestore = false;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          final maxScroll = _scrollController.position.maxScrollExtent;
+          _scrollController
+              .jumpTo(widget.arguments.initialOffset.clamp(0.0, maxScroll));
+        }
+      });
+    } else if (_scrollController.hasClients) {
       _scrollController.jumpTo(0);
     }
   }
@@ -60,6 +78,31 @@ class _ReadingPageState extends ConsumerState<ReadingPage> {
           _chapterIndex,
           _scrollController.offset,
         );
+  }
+
+  void _scrollToAndHighlightToken(int tokenIndex) {
+    _highlightTimer?.cancel();
+    setState(() {
+      _highlightTokenIndex = tokenIndex;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final keyContext = _highlightBlockKey.currentContext;
+      if (keyContext != null) {
+        Scrollable.ensureVisible(
+          keyContext,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut,
+          alignment: 0.3,
+        );
+      }
+      _highlightTimer = Timer(const Duration(seconds: 5), () {
+        if (mounted) {
+          setState(() {
+            _highlightTokenIndex = null;
+          });
+        }
+      });
+    });
   }
 
   void _showSettingsSheet(ReadingSettings settings) {
@@ -197,11 +240,13 @@ class _ReadingPageState extends ConsumerState<ReadingPage> {
 
     // Build widgets for each block with proper hierarchy
     final widgets = <Widget>[];
-    
+    int globalTokenIndex = 0;
+
     for (final block in chapter.blocks) {
       final blockSpans = <TextSpan>[];
       int cursor = block.start;
-      
+      bool blockContainsHighlight = false;
+
       // Find tokens within this block
       final blockTokens = chapter.tokens.where((token) =>
         token.start >= block.start && token.end <= block.end
@@ -213,6 +258,12 @@ class _ReadingPageState extends ConsumerState<ReadingPage> {
           blockSpans.add(TextSpan(text: text));
         }
 
+        final isFlashHighlight = _highlightTokenIndex != null &&
+            globalTokenIndex == _highlightTokenIndex;
+        if (isFlashHighlight) {
+          blockContainsHighlight = true;
+        }
+
         final overlapping = highlights.where((h) {
           if (h.chapterIndex != _chapterIndex) {
             return false;
@@ -220,22 +271,24 @@ class _ReadingPageState extends ConsumerState<ReadingPage> {
           return h.startOffset < token.end && h.endOffset > token.start;
         }).toList();
 
-        final bgColor = overlapping.isNotEmpty
-            ? Color(overlapping.last.colorValue)
-            : null;
+        Color? bgColor;
+        if (isFlashHighlight) {
+          bgColor = Theme.of(context).colorScheme.primary.withValues(alpha: 0.4);
+        } else if (overlapping.isNotEmpty) {
+          bgColor = Color(overlapping.last.colorValue).withValues(alpha: 0.7);
+        }
 
         blockSpans.add(
           TextSpan(
             text: chapter.text.substring(token.start, token.end),
             style: bgColor == null
                 ? null
-                : TextStyle(
-                    backgroundColor: bgColor.withValues(alpha: 0.7),
-                  ),
+                : TextStyle(backgroundColor: bgColor),
           ),
         );
 
         cursor = token.end;
+        globalTokenIndex++;
       }
 
       if (cursor < block.end) {
@@ -256,26 +309,26 @@ class _ReadingPageState extends ConsumerState<ReadingPage> {
             )
           : baseStyle;
 
-      widgets.add(
-        Padding(
-          padding: EdgeInsets.only(
-            bottom: block.type == 'heading' ? 16.0 : 12.0,
-            top: block.type == 'heading' ? 8.0 : 0.0,
+      final blockWidget = Padding(
+        key: blockContainsHighlight ? _highlightBlockKey : null,
+        padding: EdgeInsets.only(
+          bottom: block.type == 'heading' ? 16.0 : 12.0,
+          top: block.type == 'heading' ? 8.0 : 0.0,
+        ),
+        child: SelectableText.rich(
+          TextSpan(
+            style: blockStyle,
+            children: blockSpans,
           ),
-          child: SelectableText.rich(
-            TextSpan(
-              style: blockStyle,
-              children: blockSpans,
-            ),
-            onSelectionChanged: (selection, _) {
-              _selection = selection;
-            },
-            contextMenuBuilder: (context, editableTextState) {
-              return _buildContextMenu(context, editableTextState);
-            },
-          ),
+          onSelectionChanged: (selection, _) {
+            _selection = selection;
+          },
+          contextMenuBuilder: (context, editableTextState) {
+            return _buildContextMenu(context, editableTextState);
+          },
         ),
       );
+      widgets.add(blockWidget);
     }
 
     return Column(
@@ -392,15 +445,24 @@ class _ReadingPageState extends ConsumerState<ReadingPage> {
             actions: [
               IconButton(
                 tooltip: 'Fast reading mode',
-                onPressed: () {
-                  Navigator.of(context).pushNamed(
+                onPressed: () async {
+                  final books = ref.read(libraryProvider);
+                  final book = books.where((b) => b.id == widget.arguments.bookId).firstOrNull;
+                  final tokenIndex = (book != null && book.lastReadChapter == _chapterIndex)
+                      ? book.lastReadTokenIndex
+                      : 0;
+                  final result = await Navigator.of(context).pushNamed<int>(
                     AppRouter.fastReading,
                     arguments: FastReadingArguments(
                       bookId: widget.arguments.bookId,
                       filePath: widget.arguments.filePath,
                       initialChapter: _chapterIndex,
+                      initialTokenIndex: tokenIndex,
                     ),
                   );
+                  if (result != null && mounted) {
+                    _scrollToAndHighlightToken(result);
+                  }
                 },
                 icon: const Icon(Icons.bolt),
               ),

@@ -53,4 +53,23 @@ class LibraryNotifier extends StateNotifier<List<Book>> {
     state = next;
     await _storage.saveBooks(state);
   }
+
+  Future<void> updateFastReadingProgress(
+    String bookId,
+    int chapterIndex,
+    int tokenIndex,
+  ) async {
+    final next = state.map((book) {
+      if (book.id != bookId) {
+        return book;
+      }
+      return book.copyWith(
+        lastReadChapter: chapterIndex,
+        lastReadTokenIndex: tokenIndex,
+        lastReadAt: DateTime.now(),
+      );
+    }).toList();
+    state = next;
+    await _storage.saveBooks(next);
+  }
 }

@@ -7,6 +7,7 @@ class Book {
     this.coverPath,
     this.lastReadChapter = 0,
     this.lastReadOffset = 0.0,
+    this.lastReadTokenIndex = 0,
     this.lastReadAt,
   });
 
@@ -17,6 +18,7 @@ class Book {
   final String? coverPath;
   final int lastReadChapter;
   final double lastReadOffset;
+  final int lastReadTokenIndex;
   final DateTime? lastReadAt;
 
   Book copyWith({
@@ -27,6 +29,7 @@ class Book {
     String? coverPath,
     int? lastReadChapter,
     double? lastReadOffset,
+    int? lastReadTokenIndex,
     DateTime? lastReadAt,
   }) {
     return Book(
@@ -37,6 +40,7 @@ class Book {
       coverPath: coverPath ?? this.coverPath,
       lastReadChapter: lastReadChapter ?? this.lastReadChapter,
       lastReadOffset: lastReadOffset ?? this.lastReadOffset,
+      lastReadTokenIndex: lastReadTokenIndex ?? this.lastReadTokenIndex,
       lastReadAt: lastReadAt ?? this.lastReadAt,
     );
   }
@@ -50,6 +54,7 @@ class Book {
       'coverPath': coverPath,
       'lastReadChapter': lastReadChapter,
       'lastReadOffset': lastReadOffset,
+      'lastReadTokenIndex': lastReadTokenIndex,
       'lastReadAt': lastReadAt?.toIso8601String(),
     };
   }
@@ -65,6 +70,7 @@ class Book {
       coverPath: json['coverPath'] as String?,
       lastReadChapter: (json['lastReadChapter'] as num?)?.toInt() ?? 0,
       lastReadOffset: (json['lastReadOffset'] as num?)?.toDouble() ?? 0.0,
+      lastReadTokenIndex: (json['lastReadTokenIndex'] as num?)?.toInt() ?? 0,
       lastReadAt: json['lastReadAt'] == null
           ? null
           : DateTime.parse(json['lastReadAt'] as String),

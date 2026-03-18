@@ -18,7 +18,7 @@ class AppRouter {
         return MaterialPageRoute(builder: (_) => ReadingPage(arguments: args));
       case fastReading:
         final args = settings.arguments as FastReadingArguments;
-        return MaterialPageRoute(
+        return MaterialPageRoute<int>(
           builder: (_) => FastReadingPage(arguments: args),
         );
       default:
@@ -32,11 +32,13 @@ class ReadingArguments {
     required this.bookId,
     required this.filePath,
     this.initialChapter = 0,
+    this.initialOffset = 0.0,
   });
 
   final String bookId;
   final String filePath;
   final int initialChapter;
+  final double initialOffset;
 }
 
 class FastReadingArguments {
@@ -44,9 +46,11 @@ class FastReadingArguments {
     required this.bookId,
     required this.filePath,
     this.initialChapter = 0,
+    this.initialTokenIndex = 0,
   });
 
   final String bookId;
   final String filePath;
   final int initialChapter;
+  final int initialTokenIndex;
 }

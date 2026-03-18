@@ -30,11 +30,9 @@ class EpubParser {
     final metadata = book.Schema?.Package?.Metadata;
     final title = metadata?.Titles?.firstOrNull ?? 'Untitled';
     final author = metadata?.Creators?.isNotEmpty == true
-        ? metadata!.Creators!.first.toString().trim().isNotEmpty
-            ? metadata.Creators!.first.toString()
-            : 'Unknown Author'
+        ? (metadata!.Creators!.first.Creator ?? 'Unknown Author')
         : 'Unknown Author';
-    final coverImage = book.CoverImage;
+    final cover = book.CoverImage;
     final chapters = <EpubChapterData>[];
 
     void addChapter(EpubChapter chapter) {
@@ -59,15 +57,10 @@ class EpubParser {
       addChapter(chapter);
     }
 
-    Uint8List? coverBytes;
-    if (coverImage != null) {
-      coverBytes = Uint8List.fromList(img.encodePng(coverImage));
-    }
-
     return ParsedEpubBook(
       title: title,
       author: author,
-      coverBytes: coverBytes,
+      coverBytes: cover != null ? Uint8List.fromList(img.encodePng(cover)) : null,
       chapters: chapters,
     );
   }
